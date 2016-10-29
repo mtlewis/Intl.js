@@ -181,24 +181,33 @@ export function createRegExpRestore () {
         // expressions generated above, because the expression matches the whole
         // match string, so we know each group and each segment between capturing
         // groups can be matched by its length alone.
-        //
-        // The purpose of the regex is to match sequences of characters other
-        // than unescaped parentheses.  This is a more complicated requirement
-        // than it seems at first glance, because it's necessary to match a
-        // parenthesis which appears immediately after a backslash ("\("), but
-        // not a parenthesis which appears immediately after an escaped backslash
-        // ("\\(").  We can't simply match [^\\]\\(, because the previous
-        // backslash could itself have a backslash preceding (and escaping) it.
-        //
-        // Any attempts to simplify this regex are encouraged!  A replacement
-        // regex should match the strings "a\\\(\\\)\\" and "a\\\)\\\(" in the
-        // test string "a\\\(\\\)\\(a\\\)\\\()".
-        exprStr = exprStr.replace(/((^|[^\\])((\\\\)*\\[()])+|[^()])+/g, (match) => {
-            return `[\\s\\S]{${match.replace(/\\(.)/g, '$1').length}}`;
-        });
+        let escaping = false,
+            characterCount = 0,
+            shortenedExprStr = '';
+
+        for (let i = 0; i < exprStr.length; i++) {
+            let testChar = exprStr[i];
+
+            if (!escaping && /[()]/.test(testChar)) {
+                if (characterCount > 0) {
+                    shortenedExprStr += `[\\s\\S]{${characterCount}}`;
+                    characterCount = 0;
+                }
+                shortenedExprStr += testChar;
+            } else if (!escaping && testChar === '\\') {
+                escaping = true;
+            } else {
+                escaping = false;
+                characterCount++;
+            }
+        }
+
+        if (characterCount > 0) {
+            shortenedExprStr += `[\\s\\S]{${characterCount}}`;
+        }
 
         // Create the regular expression that will reconstruct the RegExp properties
-        let expr = new RegExp(exprStr, regExpCache.multiline ? 'gm' : 'g');
+        let expr = new RegExp(shortenedExprStr, regExpCache.multiline ? 'gm' : 'g');
 
         // Set the lastIndex of the generated expression to ensure that the match
         // is found in the correct index.
